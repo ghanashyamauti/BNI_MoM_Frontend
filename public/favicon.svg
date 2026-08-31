@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#CF2030"/>
+  <text x="32" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Barlow Condensed', 'Arial Black', Impact, sans-serif" font-size="30" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">BNI</text>
+  <circle cx="53" cy="42" r="3" fill="#FFFFFF"/>
+</svg>
