@@ -8,16 +8,17 @@ import { SiteFooter, SiteHeader } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+import { CHAPTER } from "@/lib/format";
+
 export const Route = createFileRoute("/new")({
   head: () => ({
     meta: [
-      { title: "New Meeting Entry — BNI Elites" },
+      { title: `New Meeting Entry — ${CHAPTER}` },
       {
         name: "description",
-        content:
-          "Record this week's BNI Elites chapter meeting: scorecard, recognitions, photos and attachments.",
+        content: `Record this week's ${CHAPTER} chapter meeting: scorecard, recognitions, photos and attachments.`,
       },
-      { property: "og:title", content: "New Meeting Entry — BNI Elites" },
+      { property: "og:title", content: `New Meeting Entry — ${CHAPTER}` },
       {
         property: "og:description",
         content: "Capture the week's chapter meeting and publish a shareable meeting page.",

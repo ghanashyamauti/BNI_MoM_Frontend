@@ -22,6 +22,8 @@ export interface Attachment {
   caption?: string | undefined;
   tag?: string | undefined;
   isCover?: boolean | undefined;
+  originalUrl?: string | undefined;
+  signedUrl?: string | undefined;
 }
 
 export interface LaunchpadRow {

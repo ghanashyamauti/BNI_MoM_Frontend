@@ -13,7 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dayName, sizeLabel } from "@/lib/format";
-import { ImagePlus, Paperclip, Plus, Star, X } from "lucide-react";
+import { Crop, Eye, ImagePlus, Paperclip, Plus, Star, X } from "lucide-react";
+import { CoverPhotoSetterModal } from "@/components/CoverPhotoSetterModal";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { PhotoPreviewModal } from "@/components/PhotoPreviewModal";
 
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
@@ -64,6 +67,9 @@ export function MeetingForm({
   const m = value;
   const photoInput = useRef<HTMLInputElement>(null);
   const docInput = useRef<HTMLInputElement>(null);
+  const [cropModalPhotoId, setCropModalPhotoId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Attachment | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<Attachment | null>(null);
   const [catInput, setCatInput] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -86,22 +92,49 @@ export function MeetingForm({
         mime: f.type,
         size: f.size,
         dataUrl,
+        originalUrl: kind === "photo" ? dataUrl : undefined,
         caption: "",
         tag: kind === "photo" ? "Other" : undefined,
+        isCover: false,
       });
     }
     up((d) => {
       d.attachments.push(...added);
-      if (kind === "photo" && !d.attachments.some((a) => a.isCover)) {
-        const first = d.attachments.find((a) => a.kind === "photo");
-        if (first) first.isCover = true;
-      }
     });
     setBusy(false);
   };
 
+  const handleApplyCrop = (croppedDataUrl: string) => {
+    if (!cropModalPhotoId) return;
+    up((d) => {
+      const target = d.attachments.find((a) => a.id === cropModalPhotoId);
+      if (!target) return;
+      if (!target.originalUrl) {
+        target.originalUrl = target.dataUrl;
+      }
+      target.dataUrl = croppedDataUrl;
+      d.attachments.forEach((a) => {
+        if (a.kind === "photo") a.isCover = false;
+      });
+      target.isCover = true;
+    });
+  };
+
+  const handleRemoveCover = (photoId: string) => {
+    up((d) => {
+      const target = d.attachments.find((a) => a.id === photoId);
+      if (!target) return;
+      target.isCover = false;
+      if (target.originalUrl) {
+        target.dataUrl = target.originalUrl;
+      }
+    });
+  };
+
   const photoList = m.attachments.filter((a) => a.kind === "photo");
   const docList = m.attachments.filter((a) => a.kind === "doc");
+  const activeCover = m.attachments.find((a) => a.kind === "photo" && a.isCover);
+  const photoToCrop = m.attachments.find((a) => a.id === cropModalPhotoId);
 
   return (
     <form
@@ -691,68 +724,124 @@ export function MeetingForm({
         </div>
 
         {photoList.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {photoList.map((p) => {
-              const i = m.attachments.findIndex((a) => a.id === p.id);
-              return (
-                <div key={p.id} className="overflow-hidden rounded-md border border-border bg-card">
-                  <div className="relative">
-                    <img src={p.dataUrl} alt={p.name} className="h-36 w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        up((d) => {
-                          d.attachments.forEach((a) => {
-                            if (a.kind === "photo") a.isCover = false;
-                          });
-                          d.attachments[i]!.isCover = true;
-                        })
-                      }
-                      className={
-                        "absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold " +
-                        (p.isCover
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card/90 text-ink-soft hover:bg-card")
-                      }
-                    >
-                      <Star className="h-3 w-3" /> {p.isCover ? "Cover" : "Set cover"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        up((d) => void (d.attachments = d.attachments.filter((a) => a.id !== p.id)))
-                      }
-                      className="absolute right-2 top-2 rounded-full bg-card/90 p-1.5 text-ink-soft hover:text-primary"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {photoList.length} {photoList.length === 1 ? "photo" : "photos"} attached.
+                Setting a cover photo is <span className="font-semibold text-ink">optional</span>.
+              </span>
+              {activeCover ? (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCover(activeCover.id)}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Remove active cover
+                </button>
+              ) : (
+                <span className="italic">No cover photo set</span>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {photoList.map((p) => {
+                const i = m.attachments.findIndex((a) => a.id === p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className={`overflow-hidden rounded-md border bg-card transition-all ${
+                      p.isCover
+                        ? "border-primary ring-2 ring-primary/40 shadow-sm"
+                        : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <div className="relative group overflow-hidden">
+                      <img
+                        src={p.dataUrl}
+                        alt={p.name}
+                        onClick={() => setPreviewPhoto(p)}
+                        className="h-36 w-full object-cover cursor-pointer transition-transform duration-200 group-hover:scale-105"
+                        title="Click to preview photo in popup card"
+                      />
+                      <div
+                        onClick={() => setPreviewPhoto(p)}
+                        className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer pointer-events-none"
+                      >
+                        <span className="inline-flex items-center gap-1 rounded-full bg-black/75 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur shadow">
+                          <Eye className="h-3.5 w-3.5" /> Preview
+                        </span>
+                      </div>
+
+                      {p.isCover ? (
+                        <div className="absolute left-2 top-2 flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCover(p.id)}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow hover:bg-primary/85 transition-colors"
+                            title="Click to remove cover photo"
+                          >
+                            <Star className="h-3 w-3 fill-current" /> Cover (Click to remove)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCropModalPhotoId(p.id)}
+                            className="inline-flex items-center gap-1 rounded-full bg-card/95 px-2 py-1 text-[11px] font-medium text-ink shadow hover:bg-card hover:text-primary transition-colors"
+                            title="Adjust crop & position"
+                          >
+                            <Crop className="h-3 w-3" /> Adjust
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCropModalPhotoId(p.id)}
+                          className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/95 px-2.5 py-1 text-[11px] font-semibold text-ink-soft shadow hover:bg-primary hover:text-primary-foreground transition-all"
+                          title="Click to set as cover photo"
+                        >
+                          <Star className="h-3 w-3 text-muted-foreground" /> Set cover
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        aria-label="Remove photo"
+                        onClick={() =>
+                          up((d) => void (d.attachments = d.attachments.filter((a) => a.id !== p.id)))
+                        }
+                        className="absolute right-2 top-2 rounded-full bg-card/90 p-1.5 text-ink-soft hover:text-primary shadow"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder="Caption (optional)"
+                        value={p.caption ?? ""}
+                        onChange={(e) =>
+                          up((d) => void (d.attachments[i]!.caption = e.target.value))
+                        }
+                      />
+                      <Select
+                        value={p.tag ?? "Other"}
+                        onValueChange={(v) => up((d) => void (d.attachments[i]!.tag = v))}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHOTO_TAGS.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="space-y-2 p-3">
-                    <Input
-                      className="h-8 text-xs"
-                      placeholder="Caption (optional)"
-                      value={p.caption ?? ""}
-                      onChange={(e) => up((d) => void (d.attachments[i]!.caption = e.target.value))}
-                    />
-                    <Select
-                      value={p.tag ?? "Other"}
-                      onValueChange={(v) => up((d) => void (d.attachments[i]!.tag = v))}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHOTO_TAGS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         ) : null}
 
@@ -761,24 +850,47 @@ export function MeetingForm({
             {docList.map((d0) => (
               <li
                 key={d0.id}
-                className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+                className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 text-sm hover:bg-secondary/40 transition-colors"
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Paperclip className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="truncate">{d0.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(d0)}
+                  className="flex min-w-0 items-center gap-2.5 text-left flex-1 cursor-pointer group"
+                  title="Click to preview document in popup"
+                >
+                  <Paperclip className="h-4 w-4 shrink-0 text-primary group-hover:scale-110 transition-transform" />
+                  <span className="truncate font-medium text-ink group-hover:text-primary group-hover:underline transition-colors">
+                    {d0.name}
+                  </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {sizeLabel(d0.size)}
                   </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    up((d) => void (d.attachments = d.attachments.filter((a) => a.id !== d0.id)))
-                  }
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  <X className="h-4 w-4" />
+                  <span className="shrink-0 text-[10px] uppercase font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full hidden sm:inline-block">
+                    Preview
+                  </span>
                 </button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPreviewDoc(d0)}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-primary gap-1"
+                    title="Preview document"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Preview
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      up((d) => void (d.attachments = d.attachments.filter((a) => a.id !== d0.id)))
+                    }
+                    className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Remove attachment"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -793,6 +905,34 @@ export function MeetingForm({
           {submitLabel}
         </Button>
       </div>
+
+      {photoToCrop ? (
+        <CoverPhotoSetterModal
+          isOpen={Boolean(cropModalPhotoId)}
+          onClose={() => setCropModalPhotoId(null)}
+          imageSrc={photoToCrop.originalUrl || photoToCrop.dataUrl}
+          meetingDate={m.date}
+          onApply={handleApplyCrop}
+        />
+      ) : null}
+
+      {previewDoc ? (
+        <DocumentPreviewModal
+          document={previewDoc}
+          isOpen={Boolean(previewDoc)}
+          onClose={() => setPreviewDoc(null)}
+        />
+      ) : null}
+
+      {previewPhoto ? (
+        <PhotoPreviewModal
+          photo={previewPhoto}
+          photos={photoList}
+          isOpen={Boolean(previewPhoto)}
+          onClose={() => setPreviewPhoto(null)}
+          onSelectPhoto={setPreviewPhoto}
+        />
+      ) : null}
     </form>
   );
 }

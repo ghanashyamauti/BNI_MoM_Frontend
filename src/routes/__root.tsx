@@ -12,6 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { CHAPTER } from "@/lib/format";
 
 function NotFoundComponent() {
   return (
@@ -78,17 +79,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "BNI Elites — Weekly Meeting Archive" },
+      { title: `${CHAPTER} — Weekly Meeting Archive` },
       {
         name: "description",
-        content:
-          "Weekly meeting records for the BNI Elites chapter: scorecards, recognitions, photos and trends.",
+        content: `Weekly meeting records for the ${CHAPTER} chapter: scorecards, recognitions, photos and trends.`,
       },
-      { name: "author", content: "BNI Elites" },
-      { property: "og:title", content: "BNI Elites — Weekly Meeting Archive" },
+      { name: "author", content: CHAPTER },
+      { property: "og:title", content: `${CHAPTER} — Weekly Meeting Archive` },
       {
         property: "og:description",
-        content: "Weekly meeting records for the BNI Elites chapter.",
+        content: `Weekly meeting records for the ${CHAPTER} chapter.`,
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

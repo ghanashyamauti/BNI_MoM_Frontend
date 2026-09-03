@@ -21,16 +21,15 @@ import { ArrowRight, CalendarPlus, TrendingUp } from "lucide-react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BNI Elites — Weekly Meeting Archive" },
+      { title: `${CHAPTER} — Weekly Meeting Archive` },
       {
         name: "description",
-        content:
-          "Browse every BNI Elites chapter meeting: scorecards, recognitions, photos and week-over-week referral and business trends.",
+        content: `Browse every ${CHAPTER} chapter meeting: scorecards, recognitions, photos and week-over-week referral and business trends.`,
       },
-      { property: "og:title", content: "BNI Elites — Weekly Meeting Archive" },
+      { property: "og:title", content: `${CHAPTER} — Weekly Meeting Archive` },
       {
         property: "og:description",
-        content: "Every BNI Elites weekly meeting record in one polished, shareable archive.",
+        content: `Every ${CHAPTER} weekly meeting record in one polished, shareable archive.`,
       },
     ],
   }),

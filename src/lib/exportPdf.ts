@@ -1,6 +1,7 @@
 import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import type { Meeting } from "./types";
+import { CHAPTER } from "./format";
 
 /**
  * Captures the meeting detail DOM element and exports it as a high-resolution,
@@ -129,6 +130,16 @@ export async function downloadPdf(node: HTMLElement, m: Meeting): Promise<void> 
     format: "a4",
   });
 
+  const apiBase = (import.meta.env["VITE_API_URL"] || "").replace(/\/api\/?$/, "");
+
+  const getAttachmentUrl = (attachmentId: string) => {
+    const att = m.attachments?.find((a) => a.id === attachmentId);
+    if (att?.signedUrl) {
+      return att.signedUrl.startsWith("http") ? att.signedUrl : `${apiBase}${att.signedUrl}`;
+    }
+    return `${apiBase}/api/meetings/${encodeURIComponent(m.id)}/attachments/${encodeURIComponent(attachmentId)}`;
+  };
+
   for (let i = 0; i < slices.length; i++) {
     const slice = slices[i];
     if (!slice) continue;
@@ -163,9 +174,124 @@ export async function downloadPdf(node: HTMLElement, m: Meeting): Promise<void> 
         PRINTABLE_WIDTH_MM,
         pageHeightMm,
       );
+
+      // 4.1. Inject clickable links for documents on this page (secure signed link)
+      const docEls = Array.from(node.querySelectorAll<HTMLElement>("[data-doc-id]"));
+      for (const el of docEls) {
+        const docId = el.getAttribute("data-doc-id");
+        if (!docId) continue;
+        const rect = el.getBoundingClientRect();
+        const topInCanvas = (rect.top - nodeRect.top) * scaleRatio;
+        const bottomInCanvas = (rect.bottom - nodeRect.top) * scaleRatio;
+
+        if (topInCanvas >= startY && topInCanvas < endY) {
+          const leftInCanvas = (rect.left - nodeRect.left) * scaleRatio;
+          const xMm = MARGIN_SIDE_MM + (leftInCanvas * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const yMm = MARGIN_TOP_MM + ((topInCanvas - startY) * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const wMm = (rect.width * scaleRatio * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const hMm = ((Math.min(bottomInCanvas, endY) - topInCanvas) * PRINTABLE_WIDTH_MM) / canvasWidth;
+
+          pdf.setPage(i + 1);
+          pdf.link(xMm, yMm, wMm, hMm, {
+            url: getAttachmentUrl(docId),
+          });
+        }
+      }
+
+      // 4.2. Inject clickable links for photos on this page (secure signed link)
+      const photoEls = Array.from(node.querySelectorAll<HTMLElement>("[data-photo-id]"));
+      for (const el of photoEls) {
+        const photoId = el.getAttribute("data-photo-id");
+        if (!photoId) continue;
+        const rect = el.getBoundingClientRect();
+        const topInCanvas = (rect.top - nodeRect.top) * scaleRatio;
+        const bottomInCanvas = (rect.bottom - nodeRect.top) * scaleRatio;
+
+        if (topInCanvas >= startY && topInCanvas < endY) {
+          const leftInCanvas = (rect.left - nodeRect.left) * scaleRatio;
+          const xMm = MARGIN_SIDE_MM + (leftInCanvas * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const yMm = MARGIN_TOP_MM + ((topInCanvas - startY) * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const wMm = (rect.width * scaleRatio * PRINTABLE_WIDTH_MM) / canvasWidth;
+          const hMm = ((Math.min(bottomInCanvas, endY) - topInCanvas) * PRINTABLE_WIDTH_MM) / canvasWidth;
+
+          pdf.setPage(i + 1);
+          pdf.link(xMm, yMm, wMm, hMm, {
+            url: getAttachmentUrl(photoId),
+          });
+        }
+      }
     }
   }
 
-  const filename = `BNI-Elites-${m.date || "meeting"}.pdf`;
+  // 5. Append dedicated full-resolution photo appendix pages in the PDF
+  const attachedPhotos = m.attachments.filter((a) => a.kind === "photo");
+  if (attachedPhotos.length > 0) {
+    for (const photo of attachedPhotos) {
+      const src = photo.originalUrl || photo.dataUrl;
+      if (!src) continue;
+
+      pdf.addPage();
+
+      // Title & Tag
+      pdf.setFontSize(13);
+      pdf.setTextColor(28, 31, 38);
+      const title = photo.caption || photo.tag || "Meeting Photo";
+      pdf.text(title, MARGIN_SIDE_MM, MARGIN_TOP_MM + 4);
+
+      if (photo.tag) {
+        pdf.setFontSize(9);
+        pdf.setTextColor(207, 32, 48); // BNI Red
+        pdf.text(photo.tag.toUpperCase(), MARGIN_SIDE_MM, MARGIN_TOP_MM + 10);
+      }
+
+      // Draw photo centered within printable bounds
+      try {
+        const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth || 800, h: img.naturalHeight || 600 });
+          img.onerror = () => resolve({ w: 800, h: 600 });
+          img.src = src;
+        });
+
+        const maxW = PRINTABLE_WIDTH_MM;
+        const maxH = PRINTABLE_HEIGHT_MM - 28;
+        const ratio = Math.min(maxW / dims.w, maxH / dims.h);
+        const drawW = dims.w * ratio;
+        const drawH = dims.h * ratio;
+        const drawX = MARGIN_SIDE_MM + (PRINTABLE_WIDTH_MM - drawW) / 2;
+        const drawY = MARGIN_TOP_MM + 14 + (maxH - drawH) / 2;
+
+        pdf.addImage(src, "JPEG", drawX, drawY, drawW, drawH, undefined, "FAST");
+
+        // Link on the photo to open raw photo directly in browser
+        pdf.link(drawX, drawY, drawW, drawH, {
+          url: getAttachmentUrl(photo.id),
+        });
+      } catch (err) {
+        console.warn("Could not embed full photo into PDF appendix:", err);
+      }
+
+      // Footer with direct photo link
+      pdf.setFontSize(8);
+      pdf.setTextColor(156, 163, 175);
+      pdf.text(
+        `${CHAPTER} · ${m.date || ""}`,
+        MARGIN_SIDE_MM,
+        PDF_HEIGHT_MM - MARGIN_BOTTOM_MM,
+      );
+
+      const linkText = "[Click to open photo in browser]";
+      pdf.setTextColor(207, 32, 48);
+      const linkX = PDF_WIDTH_MM - MARGIN_SIDE_MM - 55;
+      const linkY = PDF_HEIGHT_MM - MARGIN_BOTTOM_MM;
+      pdf.text(linkText, linkX, linkY);
+      pdf.link(linkX, linkY - 3, 55, 4, {
+        url: getAttachmentUrl(photo.id),
+      });
+    }
+  }
+
+  const safeChapter = (CHAPTER || "meeting").replace(/[^a-zA-Z0-9_-]/g, "-");
+  const filename = `${safeChapter}-${m.date || "meeting"}.pdf`;
   pdf.save(filename);
 }

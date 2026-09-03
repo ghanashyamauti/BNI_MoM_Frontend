@@ -81,7 +81,7 @@ export async function downloadPpt(m: Meeting) {
     });
   }
   t.addShape("rect", { x: 0, y: 0, w: 0.28, h: 7.5, fill: { color: RED } });
-  t.addText("BNI ELITES", {
+  t.addText(CHAPTER.toUpperCase(), {
     x: 0.8,
     y: 2.1,
     w: 6,
@@ -361,5 +361,6 @@ export async function downloadPpt(m: Meeting) {
     );
   }
 
-  await pptx.writeFile({ fileName: `BNI-Elites-${m.date}.pptx` });
+  const safeChapter = CHAPTER.replace(/[^a-zA-Z0-9_-]/g, "-");
+  await pptx.writeFile({ fileName: `${safeChapter}-${m.date}.pptx` });
 }

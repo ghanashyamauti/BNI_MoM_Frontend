@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Meeting, Attachment, Person } from "@/lib/types";
 import {
   CHAPTER,
@@ -8,12 +9,15 @@ import {
   has,
   hasRecognitions,
   longDate,
+  photos,
   photosByTag,
   sizeLabel,
   untaggedPhotos,
 } from "@/lib/format";
-import { Download, FileText } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 import { BniMark } from "@/components/Brand";
+import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
+import { PhotoPreviewModal } from "@/components/PhotoPreviewModal";
 
 function Stat({ label, value, big }: { label: string; value: string; big?: boolean }) {
   const missing = value === "not recorded";
@@ -65,20 +69,36 @@ function Section({
   );
 }
 
-function PhotoGrid({ items }: { items: Attachment[] }) {
+function PhotoGrid({
+  items,
+  onSelect,
+}: {
+  items: Attachment[];
+  onSelect?: (p: Attachment) => void;
+}) {
   if (items.length === 0) return null;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((p) => (
         <figure
           key={p.id}
-          className="print-break overflow-hidden rounded-md border border-border bg-card"
+          data-photo-id={p.id}
+          onClick={() => onSelect?.(p)}
+          className="print-break overflow-hidden rounded-md border border-border bg-card cursor-pointer group transition-all hover:border-primary hover:shadow-md"
+          title="Click to preview photo in popup card"
         >
-          <img
-            src={p.dataUrl}
-            alt={p.caption || p.tag || "Meeting photo"}
-            className="h-48 w-full object-cover"
-          />
+          <div className="relative overflow-hidden">
+            <img
+              src={p.originalUrl || p.dataUrl}
+              alt={p.caption || p.tag || "Meeting photo"}
+              className="h-48 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-1 text-xs font-semibold text-white backdrop-blur shadow">
+                <Eye className="h-3.5 w-3.5" /> Preview
+              </span>
+            </div>
+          </div>
           {has(p.caption) ? (
             <figcaption className="px-3 py-2 text-xs text-muted-foreground">{p.caption}</figcaption>
           ) : null}
@@ -99,8 +119,35 @@ function Pair({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function MeetingView({ m }: { m: Meeting }) {
+export function MeetingView({
+  m,
+  initialDoc,
+  initialPhoto,
+}: {
+  m: Meeting;
+  initialDoc?: Attachment | null;
+  initialPhoto?: Attachment | null;
+}) {
+  const [previewDoc, setPreviewDoc] = useState<Attachment | null>(() => initialDoc ?? null);
+  const [previewPhoto, setPreviewPhoto] = useState<Attachment | null>(() => initialPhoto ?? null);
+  const [galleryPhotos, setGalleryPhotos] = useState<Attachment[]>([]);
   const cover = coverPhoto(m);
+
+  useEffect(() => {
+    if (initialDoc) setPreviewDoc(initialDoc);
+  }, [initialDoc]);
+
+  useEffect(() => {
+    if (initialPhoto) {
+      setPreviewPhoto(initialPhoto);
+      setGalleryPhotos(photos(m) || [initialPhoto]);
+    }
+  }, [initialPhoto, m]);
+
+  const openPhotoPreview = (p: Attachment, list?: Attachment[]) => {
+    setPreviewPhoto(p);
+    setGalleryPhotos(list ?? (photos(m) || []));
+  };
   const s = m.scorecard;
   const usedTags: string[] = [];
   let n = 0;
@@ -129,11 +176,15 @@ export function MeetingView({ m }: { m: Meeting }) {
   return (
     <article className="print-page mx-auto w-full max-w-4xl bg-card">
       {cover ? (
-        <div className="relative h-56 w-full overflow-hidden md:h-80">
+        <div
+          onClick={() => openPhotoPreview(cover, [cover])}
+          className="relative h-56 w-full overflow-hidden md:h-80 cursor-pointer group"
+          title="Click to view full cover photo"
+        >
           <img
-            src={cover.dataUrl}
+            src={cover.originalUrl || cover.dataUrl}
             alt={cover.caption || "Meeting cover"}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-102"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/30 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
@@ -280,7 +331,7 @@ export function MeetingView({ m }: { m: Meeting }) {
                 ))}
               </ul>
             ) : null}
-            <PhotoGrid items={eduPhotos} />
+            <PhotoGrid items={eduPhotos} onSelect={(p) => openPhotoPreview(p, eduPhotos)} />
           </Section>
         ) : null}
 
@@ -301,7 +352,7 @@ export function MeetingView({ m }: { m: Meeting }) {
                 {m.feature.outcome}
               </p>
             ) : null}
-            <PhotoGrid items={featurePhotos} />
+            <PhotoGrid items={featurePhotos} onSelect={(p) => openPhotoPreview(p, featurePhotos)} />
           </Section>
         ) : null}
 
@@ -322,7 +373,7 @@ export function MeetingView({ m }: { m: Meeting }) {
                   </div>
                 ))}
             </div>
-            <PhotoGrid items={launchPhotos} />
+            <PhotoGrid items={launchPhotos} onSelect={(p) => openPhotoPreview(p, launchPhotos)} />
           </Section>
         ) : null}
 
@@ -398,7 +449,7 @@ export function MeetingView({ m }: { m: Meeting }) {
                 </div>
               ) : null}
             </div>
-            <PhotoGrid items={recPhotos} />
+            <PhotoGrid items={recPhotos} onSelect={(p) => openPhotoPreview(p, recPhotos)} />
           </Section>
         ) : null}
 
@@ -435,7 +486,7 @@ export function MeetingView({ m }: { m: Meeting }) {
                 ) : null}
               </blockquote>
             ) : null}
-            <PhotoGrid items={visitorPhotos} />
+            <PhotoGrid items={visitorPhotos} onSelect={(p) => openPhotoPreview(p, visitorPhotos)} />
           </Section>
         ) : null}
 
@@ -464,7 +515,7 @@ export function MeetingView({ m }: { m: Meeting }) {
 
         {rest.length > 0 ? (
           <Section title="Photo Gallery" index={idx()}>
-            <PhotoGrid items={rest} />
+            <PhotoGrid items={rest} onSelect={(p) => openPhotoPreview(p, rest)} />
           </Section>
         ) : null}
 
@@ -474,24 +525,46 @@ export function MeetingView({ m }: { m: Meeting }) {
               {documents.map((d) => (
                 <li
                   key={d.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-3"
+                  data-doc-id={d.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-secondary/30 transition-colors rounded-md border border-transparent hover:border-border/60"
                 >
-                  <span className="flex min-w-0 items-center gap-2 sm:gap-3">
-                    <FileText className="h-4 w-4 shrink-0 text-primary" />
-                    <span className="truncate font-medium text-ink text-sm sm:text-base">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc(d)}
+                    className="flex min-w-0 items-center gap-2 sm:gap-3 text-left flex-1 cursor-pointer group"
+                    title="Click to preview document in popup card"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="truncate font-medium text-ink text-sm sm:text-base group-hover:text-primary group-hover:underline transition-colors">
                       {d.name}
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {sizeLabel(d.size)}
                     </span>
-                  </span>
-                  <a
-                    href={d.dataUrl}
-                    download={d.name}
-                    className="no-print inline-flex shrink-0 items-center gap-1 text-xs sm:text-sm font-semibold text-primary hover:underline self-end sm:self-auto"
-                  >
-                    <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Download
-                  </a>
+                    <span className="shrink-0 text-[10px] uppercase font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full hidden sm:inline-block">
+                      Preview
+                    </span>
+                    <span className="hidden print:inline-block text-[11px] font-semibold text-primary underline shrink-0 ml-auto">
+                      [Click to view document]
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc(d)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-secondary/80 hover:bg-secondary px-2.5 py-1.5 rounded-md border border-border/80 transition-colors"
+                      title="Preview document"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </button>
+                    <a
+                      href={d.dataUrl}
+                      download={d.name}
+                      className="no-print inline-flex shrink-0 items-center gap-1 text-xs sm:text-sm font-semibold text-primary hover:underline px-2 py-1"
+                    >
+                      <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Download
+                    </a>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -504,6 +577,24 @@ export function MeetingView({ m }: { m: Meeting }) {
           </p>
         </footer>
       </div>
+
+      {previewDoc ? (
+        <DocumentPreviewModal
+          document={previewDoc}
+          isOpen={Boolean(previewDoc)}
+          onClose={() => setPreviewDoc(null)}
+        />
+      ) : null}
+
+      {previewPhoto ? (
+        <PhotoPreviewModal
+          photo={previewPhoto}
+          photos={galleryPhotos}
+          isOpen={Boolean(previewPhoto)}
+          onClose={() => setPreviewPhoto(null)}
+          onSelectPhoto={setPreviewPhoto}
+        />
+      ) : null}
     </article>
   );
 }

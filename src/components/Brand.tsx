@@ -2,15 +2,19 @@ import { Link } from "@tanstack/react-router";
 import { CHAPTER } from "@/lib/format";
 
 export function BniMark({ className = "" }: { className?: string }) {
+  const parts = CHAPTER.split(" ");
+  const prefix = parts[0] || "BNI";
+  const suffix = parts.slice(1).join(" ") || "Chapter";
+
   return (
-    <span className={"inline-flex items-center gap-2 " + className} aria-label="BNI Elites">
+    <span className={"inline-flex items-center gap-2 " + className} aria-label={CHAPTER}>
       <span className="flex h-9 items-center rounded-sm bg-primary px-2 font-display text-2xl font-bold leading-none tracking-tight text-primary-foreground">
-        BNI
+        {prefix}
         <span className="ml-[3px] mt-[7px] block h-1.5 w-1.5 rounded-full bg-primary-foreground" />
       </span>
       <span className="flex flex-col leading-none">
         <span className="font-display text-lg font-semibold uppercase tracking-[0.16em] text-ink">
-          Elites
+          {suffix}
         </span>
         <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
           Chapter

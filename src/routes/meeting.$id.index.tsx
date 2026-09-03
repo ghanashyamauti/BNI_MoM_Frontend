@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import type { Meeting } from "@/lib/types";
+import type { Attachment, Meeting } from "@/lib/types";
 import { deleteMeeting, getMeeting } from "@/lib/storage";
 import { MeetingView } from "@/components/MeetingView";
 import { SiteFooter, SiteHeader } from "@/components/Brand";
@@ -10,20 +10,20 @@ import { downloadPdf } from "@/lib/exportPdf";
 import { ArrowLeft, FileDown, Loader2, Pencil, Presentation, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { CHAPTER } from "@/lib/format";
+
 export const Route = createFileRoute("/meeting/$id/")({
   head: () => ({
     meta: [
-      { title: "Meeting Record — BNI Elites" },
+      { title: `Meeting Record — ${CHAPTER}` },
       {
         name: "description",
-        content:
-          "A BNI Elites weekly meeting record: scorecard, highlights, recognitions and photos.",
+        content: `A ${CHAPTER} weekly meeting record: scorecard, highlights, recognitions and photos.`,
       },
-      { property: "og:title", content: "Meeting Record — BNI Elites" },
+      { property: "og:title", content: `Meeting Record — ${CHAPTER}` },
       {
         property: "og:description",
-        content:
-          "A BNI Elites weekly meeting record: scorecard, highlights, recognitions and photos.",
+        content: `A ${CHAPTER} weekly meeting record: scorecard, highlights, recognitions and photos.`,
       },
     ],
   }),
@@ -34,11 +34,27 @@ function MeetingPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState<Meeting | null | undefined>(undefined);
+  const [initialDoc, setInitialDoc] = useState<Attachment | null>(null);
+  const [initialPhoto, setInitialPhoto] = useState<Attachment | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void getMeeting(id).then((m) => setMeeting(m ?? null));
+    void getMeeting(id).then((m) => {
+      setMeeting(m ?? null);
+      if (m && typeof window !== "undefined") {
+        const search = new URLSearchParams(window.location.search);
+        const docId = search.get("doc");
+        const photoId = search.get("photo");
+        if (docId) {
+          const d = m.attachments.find((a) => a.id === docId && a.kind === "doc");
+          if (d) setInitialDoc(d);
+        } else if (photoId) {
+          const p = m.attachments.find((a) => a.id === photoId && a.kind === "photo");
+          if (p) setInitialPhoto(p);
+        }
+      }
+    });
   }, [id]);
 
   if (meeting === undefined) {
@@ -151,7 +167,7 @@ function MeetingPage() {
         </div>
 
         <div ref={printRef} className="panel overflow-hidden print-page">
-          <MeetingView m={m} />
+          <MeetingView m={m} initialDoc={initialDoc} initialPhoto={initialPhoto} />
         </div>
       </main>
       <SiteFooter />

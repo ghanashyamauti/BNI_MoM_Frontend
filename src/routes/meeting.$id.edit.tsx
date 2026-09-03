@@ -4,18 +4,18 @@ import type { Meeting } from "@/lib/types";
 import { getMeeting, saveMeeting } from "@/lib/storage";
 import { MeetingForm } from "@/components/MeetingForm";
 import { SiteFooter, SiteHeader } from "@/components/Brand";
-import { longDate } from "@/lib/format";
+import { CHAPTER, longDate } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/meeting/$id/edit")({
   head: () => ({
     meta: [
-      { title: "Edit Meeting — BNI Elites" },
-      { name: "description", content: "Update an existing BNI Elites weekly meeting record." },
-      { property: "og:title", content: "Edit Meeting — BNI Elites" },
+      { title: `Edit Meeting — ${CHAPTER}` },
+      { name: "description", content: `Update an existing ${CHAPTER} weekly meeting record.` },
+      { property: "og:title", content: `Edit Meeting — ${CHAPTER}` },
       {
         property: "og:description",
-        content: "Update an existing BNI Elites weekly meeting record.",
+        content: `Update an existing ${CHAPTER} weekly meeting record.`,
       },
     ],
   }),
